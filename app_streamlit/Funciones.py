@@ -1,93 +1,91 @@
 import pandas as pd
 import os
+import joblib
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score
 
-def cargar_datasets():
+# --- CONFIGURACIÓN DE RUTAS ---
+# Calculamos la ruta base del proyecto (subimos un nivel desde 'src')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_TRAIN_PATH = os.path.join(BASE_DIR, "data", "train", "train_limpio.csv")
+DATA_TEST_PATH = os.path.join(BASE_DIR, "data", "test", "test_limpio.csv")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+def cargar_modelo_y_scaler():
     """
-    Carga los datasets de entrenamiento y test calculando la ruta absoluta 
-    basada en la ubicación de este archivo.
+    Carga el modelo XGBoost y el Scaler guardados por training.py.
+    Retorna (model, scaler) o (None, None) si fallan.
     """
-    # 1. Averiguamos dónde está ESTE archivo (Funciones.py)
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model_path = os.path.join(MODELS_DIR, "mejor_modelo_xgb.pkl")
+    scaler_path = os.path.join(MODELS_DIR, "scaler.pkl")
     
-    # 2. Construimos la ruta desde la base del proyecto hacia la carpeta data
-    path_train = os.path.join(base_dir, "data", "train", "train_limpio.csv")
-    path_test = os.path.join(base_dir, "data", "test", "test_limpio.csv")
-    
+    if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+        return None, None
+        
     try:
-        df_train = pd.read_csv(path_train)
-        df_test = pd.read_csv(path_test)
-        return df_train, df_test
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        return model, scaler
+    except Exception as e:
+        print(f"Error cargando artefactos: {e}")
+        return None, None
+
+def obtener_columnas_entrenamiento():
+    """
+    Lee el CSV de entrenamiento solo para obtener el orden correcto de las columnas.
+    Esto es crucial para que el Scaler y el Modelo reciban los datos en el orden correcto.
+    """
+    try:
+        # Leemos solo la primera fila para ser eficientes
+        df_dummy = pd.read_csv(DATA_TRAIN_PATH, nrows=1)
+        if 'Satisfacción' in df_dummy.columns:
+            df_dummy = df_dummy.drop(columns=['Satisfacción'])
+        return df_dummy.columns.tolist()
     except FileNotFoundError:
-        print(f"❌ Error: No se encuentran los archivos en {path_train} o {path_test}")
-        return None, None
+        return []
 
-def entrenar_modelo(df):
-    """
-    Entrena un modelo XGBoost con los datos proporcionados.
-    """
-    target = 'Satisfacción'
-    if target not in df.columns:
-        return None, None
-        
-    X = df.drop(columns=[target])
-    y = df[target]
-    
-    # Configuramos XGBoost
-    # use_label_encoder=False y eval_metric='logloss' para evitar advertencias
-    model = XGBClassifier(
-        n_estimators=100, 
-        random_state=42, 
-        use_label_encoder=False, 
-        eval_metric='logloss'
-    )
-    model.fit(X, y)
-    
-    return model, X.columns
-
-def evaluar_modelo(model, df_test, features_columns):
-    """
-    Evalúa el modelo con el dataset de test.
-    """
-    target = 'Satisfacción'
-    if target not in df_test.columns:
-        return 0
-        
-    X_test = df_test.drop(columns=[target])
-    # Aseguramos el mismo orden de columnas que en el entrenamiento
-    X_test = X_test[features_columns]
-    y_test = df_test[target]
-    
-    y_pred = model.predict(X_test)
-    return accuracy_score(y_test, y_pred)
-
-def predecir_dataset(model, df_evaluar, features_orden):
-    """
-    Realiza predicciones masivas y añade resultados al DataFrame.
-    """
-    df_eval = df_evaluar.copy()
-    
-    # Eliminamos la columna objetivo si existe (por si suben un test con respuestas)
-    if 'Satisfacción' in df_eval.columns:
-        df_eval = df_eval.drop(columns=['Satisfacción'])
-        
-    # Asegurar orden de columnas
+def cargar_test_data():
+    """Carga los datos de test para mostrar métricas (opcional)."""
     try:
-        X_pred = df_eval[features_orden]
-    except KeyError as e:
-        raise ValueError(f"Faltan columnas en el archivo subido: {e}")
+        return pd.read_csv(DATA_TEST_PATH)
+    except FileNotFoundError:
+        return None
 
-    # Predicción
-    predictions = model.predict(X_pred)
-    probabilities = model.predict_proba(X_pred)
+def predecir_dataset(model, scaler, columnas_orden, df_input):
+    """
+    Procesa, escala y predice sobre los nuevos datos.
     
-    # Extraer confianza máxima
-    confianza = [probabilities[i][p] for i, p in enumerate(predictions)]
+    Args:
+        model: Modelo cargado.
+        scaler: Scaler cargado.
+        columnas_orden: Lista de columnas en el orden correcto.
+        df_input: DataFrame subido por el usuario.
+    """
+    df_procesado = df_input.copy()
     
-    # Añadir al DF
-    df_evaluar['Prediccion_Numerica'] = predictions
-    df_evaluar['Satisfaccion_Predicha'] = df_evaluar['Prediccion_Numerica'].map({1: 'Satisfecho', 0: 'Neutral/Insatisfecho'})
-    df_evaluar['Confianza'] = confianza
+    # 1. Eliminar target si existe (por si suben un dataset etiquetado)
+    if 'Satisfacción' in df_procesado.columns:
+        df_procesado = df_procesado.drop(columns=['Satisfacción'])
+        
+    # 2. Asegurar que tenemos todas las columnas necesarias y en orden
+    try:
+        # Reordenamos las columnas para que coincidan con el entrenamiento
+        X_ordenado = df_procesado[columnas_orden]
+    except KeyError as e:
+        raise ValueError(f"El archivo subido no tiene las columnas correctas. Falta: {e}")
+
+    # 3. Escalar los datos (CRUCIAL: Usar el scaler entrenado)
+    X_scaled = scaler.transform(X_ordenado)
     
-    return df_evaluar
+    # 4. Predicción
+    predicciones = model.predict(X_scaled)
+    probabilidades = model.predict_proba(X_scaled)
+    
+    # Extraer confianza (probabilidad de la clase predicha)
+    confianza = [probabilidades[i][p] for i, p in enumerate(predicciones)]
+    
+    # 5. Formatear salida
+    df_procesado['Prediccion_Numerica'] = predicciones
+    df_procesado['Satisfaccion_Predicha'] = df_procesado['Prediccion_Numerica'].map({1: 'Satisfecho', 0: 'Neutral/Insatisfecho'})
+    df_procesado['Confianza'] = confianza
+    
+    return df_procesado

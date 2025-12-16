@@ -1,0 +1,78 @@
+# Configuración del Modelo y Entrenamiento
+# Proyecto: Predicción de Satisfacción de Aerolíneas
+
+project:
+  name: "Proyecto-ML-Aerolineas"
+  author: "Mikelliza16"
+  version: "1.0"
+
+model:
+  name: "XGBClassifier"  # Modelo ganador según notebook 03 (Accuracy: ~0.9588)
+  hyperparameters:
+    n_estimators: 200    # Valor optimizado encontrado en GridSearch
+    max_depth: 6         # Profundidad óptima
+    learning_rate: 0.2   # Tasa de aprendizaje óptima
+    objective: "binary:logistic"
+    eval_metric: "logloss"
+    use_label_encoder: False
+    random_state: 42
+
+data:
+  raw_data_path: "data/raw/train.csv"
+  # Nota: 'training.py' busca en processed, 'data processing.py' guarda en train.
+  # Se estandariza a la ruta de entrada del script de entrenamiento.
+  input_path: "data/processed/datos_limpios.csv" 
+  train_dir: "data/train"
+  test_dir: "data/test"
+  
+  # Definición de columnas
+  target_column: "Satisfacción"
+  
+  # Columnas a eliminar durante el preprocesamiento (según data processing.py)
+  cols_to_drop:
+    - "Unnamed: 0"
+    - "id"
+    - "Departure Delay in Minutes"
+    - "Customer Type"
+    - "Gate location"
+
+training:
+  test_size: 0.2         # 20% para test
+  random_state: 42       # Semilla para reproducibilidad
+  models_dir: "models"
+  model_filename: "mejor_modelo.pkl"
+  scaler_filename: "scaler.pkl"
+
+features:
+  # Características finales utilizadas por el modelo (Orden de df.info() en notebook 03)
+  all_features:
+    - "Genero"
+    - "Edad"
+    - "Tipo de viaje"
+    - "Clase"
+    - "Distancia del vuelo"
+    - "Servicio wifi a bordo"
+    - "Horario de salida/llegada conveniente"
+    - "Facilidad para reservar online"
+    - "Comida y bebida"
+    - "Embarque online"
+    - "Comodidad del asiento"
+    - "Entretenimiento a bordo"
+    - "Servicio a bordo"
+    - "Servicio de espacio para las piernas"
+    - "Gestión del equipaje"
+    - "Servicio de facturación"
+    - "Servicios en vuelo"
+    - "Limpieza"
+    - "Retraso en la llegada en minutos"
+
+dependencies:
+  python_version: "3.9+"
+  libraries:
+    - name: "pandas"
+    - name: "numpy"
+    - name: "scikit-learn"
+    - name: "xgboost"
+    - name: "joblib"
+    - name: "matplotlib"
+    - name: "seaborn"

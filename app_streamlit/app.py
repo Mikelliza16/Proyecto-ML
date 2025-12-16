@@ -2,88 +2,112 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+from sklearn.metrics import accuracy_score
 
 # --- CONFIGURACIÓN E IMPORTACIÓN ---
-# Añadimos 'src' al path para importar Funciones.py sin complicaciones
 sys.path.append(os.path.abspath("src"))
 import Funciones as f
 
-st.set_page_config(page_title="Predicción XGBoost", layout="wide", page_icon="✈️")
+st.set_page_config(page_title="Predicción Pasajeros", layout="wide", page_icon="✈️")
 
-# --- 1. LÓGICA DEL SISTEMA (CACHEADA) ---
-# @st.cache_resource hace que esto solo se ejecute UNA vez al arrancar la app
+# --- LÓGICA DEL SISTEMA (CARGA DE ARTEFACTOS) ---
 @st.cache_resource
 def iniciar_sistema():
-    df_train, df_test = f.cargar_datasets()
+    # 1. Cargar modelo y scaler reales
+    model, scaler = f.cargar_modelo_y_scaler()
     
-    if df_train is None:
-        return None, None, None
-    
-    # Entrenamos (ahora usa XGBoost definido en Funciones.py)
-    model, features = f.entrenar_modelo(df_train)
-    
-    # Evaluamos si hay datos de test
-    acc = f.evaluar_modelo(model, df_test, features) if df_test is not None else 0
-    
-    return model, features, acc
-
-# --- 2. INTERFAZ DE USUARIO ---
-def main():
-    st.title("✈️ Predicción de Satisfacción (XGBoost)")
-    st.markdown("Sube tu dataset de pasajeros para obtener predicciones instantáneas.")
-
-    # Carga del modelo (rápida gracias a la caché)
-    with st.spinner('Arrancando motor XGBoost...'):
-        model, features, accuracy = iniciar_sistema()
-
     if model is None:
-        st.error("🚨 No se encontraron los datos en 'data/train/'. Revisa las rutas.")
+        return None, None, None, 0
+    
+    # 2. Obtener orden de columnas (necesario para predecir)
+    cols = f.obtener_columnas_entrenamiento()
+    
+    # 3. Calcular métrica en test (solo informativo)
+    acc = 0
+    df_test = f.cargar_test_data()
+    if df_test is not None and len(cols) > 0:
+        try:
+            X_test = df_test[cols]
+            y_test = df_test['Satisfacción']
+            # Escalamos y predecimos para validar
+            X_test_scaled = scaler.transform(X_test)
+            y_pred = model.predict(X_test_scaled)
+            acc = accuracy_score(y_test, y_pred)
+        except Exception:
+            acc = 0 # Si falla la validación, seguimos adelante
+            
+    return model, scaler, cols, acc
+
+# --- INTERFAZ ---
+def main():
+    st.title("✈️ Predicción de Satisfacción (Inferencia)")
+    st.markdown("Sistema conectado al modelo entrenado en `models/`.")
+
+    with st.spinner('Cargando Cerebro Artificial...'):
+        model, scaler, feature_cols, accuracy = iniciar_sistema()
+
+    # Verificación de errores
+    if model is None:
+        st.error("🚨 ERROR: No se encontraron los archivos `.pkl` en la carpeta `models/`.")
+        st.warning("👉 Por favor, ejecuta primero `python training.py` para generar el modelo.")
+        st.stop()
+        
+    if not feature_cols:
+        st.error("🚨 ERROR: No se pudo leer `train_limpio.csv` para obtener la estructura de datos.")
         st.stop()
 
-    # Barra lateral informativa
+    # Sidebar con métricas reales del modelo guardado
     st.sidebar.header("Estado del Sistema")
-    st.sidebar.success("✅ Modelo Activo: XGBoost")
-    st.sidebar.metric("Precisión (Test)", f"{accuracy:.2%}")
+    st.sidebar.success("✅ Modelo Cargado Exitosamente")
+    st.sidebar.metric("Precisión del Modelo (Test)", f"{accuracy:.2%}")
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Modelo: XGBoost + StandardScaler")
 
     # Zona de carga
-    archivo = st.file_uploader("Sube archivo CSV (datos limpios)", type=['csv'])
+    archivo = st.file_uploader("Sube archivo CSV de pasajeros", type=['csv'])
 
-    # Botón de acción
-    if archivo and st.button("🚀 Ejecutar Predicción", type="primary"):
+    if archivo and st.button("🚀 Predecir Satisfacción"):
         try:
-            df_input = pd.read_csv(archivo)
+            df_user = pd.read_csv(archivo)
             
-            # Llamada a la función de predicción
-            df_resultado = f.predecir_dataset(model, df_input, features)
+            # Llamada a la función de predicción corregida
+            df_resultado = f.predecir_dataset(model, scaler, feature_cols, df_user)
             
-            # --- MOSTRAR RESULTADOS ---
+            # --- DASHBOARD DE RESULTADOS ---
             st.divider()
-            st.subheader("📊 Resultados")
+            st.subheader("📊 Resultados de la Predicción")
             
-            # Métricas
+            # KPIs
             total = len(df_resultado)
-            satisfechos = df_resultado['Satisfaccion_Predicha'].value_counts().get('Satisfecho', 0)
+            satisfechos = df_resultado[df_resultado['Satisfaccion_Predicha'] == 'Satisfecho'].shape[0]
             insatisfechos = total - satisfechos
             
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total Evaluado", total)
-            c2.metric("😊 Satisfechos", f"{satisfechos} ({satisfechos/total:.1%})")
-            c3.metric("😐 Insatisfechos", f"{insatisfechos} ({insatisfechos/total:.1%})")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Pasajeros Analizados", total)
+            col2.metric("😊 Se predicen Satisfechos", f"{satisfechos} ({satisfechos/total:.1%})")
+            col3.metric("😐 Se predicen Insatisfechos", f"{insatisfechos} ({insatisfechos/total:.1%})")
             
-            # Tabla y Descarga
-            st.write("Vista previa:")
-            st.dataframe(df_resultado.head(10), use_container_width=True)
-            
-            csv = df_resultado.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "⬇️ Descargar CSV con Predicciones",
-                csv,
-                "predicciones_xgboost.csv",
-                "text/csv"
+            # Visualización de datos
+            st.write("Detalle de las predicciones (con nivel de confianza):")
+            st.dataframe(
+                df_resultado[['Satisfaccion_Predicha', 'Confianza'] + feature_cols[:3]], 
+                use_container_width=True
             )
             
+            # Descarga
+            csv = df_resultado.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "⬇️ Descargar Resultados Completos",
+                csv,
+                "predicciones_xgboost.csv",
+                "text/csv",
+                key='download-csv'
+            )
+            
+        except ValueError as ve:
+            st.error(f"❌ Error de formato en tus datos: {ve}")
         except Exception as e:
-            st.error(f"Error al procesar el archivo: {e}")
+            st.error(f"❌ Ocurrió un error inesperado: {e}")
 
 if __name__ == "__main__":
     main()
