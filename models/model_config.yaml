@@ -1,3 +1,5 @@
+model_config:
+
 # Configuración del Modelo y Entrenamiento
 # Proyecto: Predicción de Satisfacción de Aerolíneas
 
@@ -7,11 +9,11 @@ project:
   version: "1.0"
 
 model:
-  name: "XGBClassifier"  # Modelo ganador según notebook 03 (Accuracy: ~0.9588)
+  name: "XGBClassifier"
   hyperparameters:
-    n_estimators: 200    # Valor optimizado encontrado en GridSearch
-    max_depth: 6         # Profundidad óptima
-    learning_rate: 0.2   # Tasa de aprendizaje óptima
+    n_estimators: 200    
+    max_depth: 6         
+    learning_rate: 0.2   
     objective: "binary:logistic"
     eval_metric: "logloss"
     use_label_encoder: False
@@ -19,32 +21,33 @@ model:
 
 data:
   raw_data_path: "data/raw/train.csv"
-  # Nota: 'training.py' busca en processed, 'data processing.py' guarda en train.
-  # Se estandariza a la ruta de entrada del script de entrenamiento.
-  input_path: "data/processed/datos_limpios.csv" 
+  input_path: "data/train/train_limpio.csv"
+  
   train_dir: "data/train"
   test_dir: "data/test"
   
   # Definición de columnas
   target_column: "Satisfacción"
   
-  # Columnas a eliminar durante el preprocesamiento (según data processing.py)
+  # Columnas a eliminar 
   cols_to_drop:
     - "Unnamed: 0"
     - "id"
     - "Departure Delay in Minutes"
-    - "Customer Type"
+    - "Customer Type" 
     - "Gate location"
 
 training:
-  test_size: 0.2         # 20% para test
-  random_state: 42       # Semilla para reproducibilidad
+  test_size: 0.2
+  random_state: 42
   models_dir: "models"
-  model_filename: "mejor_modelo.pkl"
+  
+  # CORRECCIÓN: 'training.py' y 'Funciones.py' usan este nombre con "_xgb"
+  model_filename: "mejor_modelo_xgb.pkl" 
   scaler_filename: "scaler.pkl"
 
 features:
-  # Características finales utilizadas por el modelo (Orden de df.info() en notebook 03)
+  # Características finales (Después de la limpieza y selección)
   all_features:
     - "Genero"
     - "Edad"
@@ -76,3 +79,4 @@ dependencies:
     - name: "joblib"
     - name: "matplotlib"
     - name: "seaborn"
+    - name: "streamlit" 

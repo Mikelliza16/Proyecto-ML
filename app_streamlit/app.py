@@ -40,7 +40,7 @@ def iniciar_sistema():
 
 # --- INTERFAZ ---
 def main():
-    st.title("✈️ Predicción de Satisfacción (Inferencia)")
+    st.title("✈️ Predicción Satisfacción de Pasajeros de vuelo")
     st.markdown("Sistema conectado al modelo entrenado en `models/`.")
 
     with st.spinner('Cargando Cerebro Artificial...'):

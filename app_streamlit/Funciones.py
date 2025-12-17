@@ -85,7 +85,7 @@ def predecir_dataset(model, scaler, columnas_orden, df_input):
     
     # 5. Formatear salida
     df_procesado['Prediccion_Numerica'] = predicciones
-    df_procesado['Satisfaccion_Predicha'] = df_procesado['Prediccion_Numerica'].map({1: 'Satisfecho', 0: 'Neutral/Insatisfecho'})
+    df_procesado['Satisfaccion_Predicha'] = df_procesado['Prediccion_Numerica'].map({1: 'Satisfecho', 0: 'Insatisfecho'})
     df_procesado['Confianza'] = confianza
     
     return df_procesado
