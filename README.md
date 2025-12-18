@@ -1,5 +1,7 @@
 # ✈️ Predicción de Satisfacción de Pasajeros Aéreos
 
+https://www.kaggle.com/datasets/teejmahal20/airline-passenger-satisfaction
+
 Este proyecto de Machine Learning tiene como objetivo predecir la satisfacción de los pasajeros de una aerolínea (Satisfecho vs. Neutral/Insatisfecho) basándose en datos demográficos, detalles del vuelo y encuestas de servicio a bordo.
 
 El modelo final ha sido desplegado en una aplicación interactiva utilizando **Streamlit**, permitiendo realizar predicciones en tiempo real sobre nuevos conjuntos de datos.
